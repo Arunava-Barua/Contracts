@@ -31,6 +31,7 @@ contract KYC {
     // we need to map the customer info with bank address
     struct Customer {
         string custName;
+        uint256 custPhone;
         string custData;
         string bankName;
         address bankAddress;
@@ -40,9 +41,8 @@ contract KYC {
     mapping(address => Bank) public bankDb;
     address[] public bankArray;
 
-    // we consider name as unique
-    mapping(string => Customer) public customerDb;
-    address[] public customerArray;
+    // we consider phone number as unique
+    mapping(uint256 => Customer) public customerDb;
 
     // Functions
 
@@ -53,38 +53,37 @@ contract KYC {
     ) public onlyAdmin {
         // banned is set to false for all banks at first
         bankDb[_bankAddress] = Bank(_bankName, _bankAddress, 0, true, true);
-        bankArray.push(_bankAddress); //check
+        bankArray.push(_bankAddress); 
     }
 
     // 2. Add New customer to the bank
     function addCustomer(
         string calldata _custName,
+        uint256 _custPhone,
         string calldata _custData,
         string calldata _bankName,
         address _bankAddress
     ) public authorized(_bankAddress, "Intruder suspected") {
-        // require(msg.sender == _bankAddress, "Intruder suspected");
         require(bankDb[msg.sender].addCustomer == true, "Bank is temporarily unable to add customer");
+
         // At first KYC is false for all customers
-        customerDb[_custName] = Customer(_custName, _custData, _bankName, _bankAddress, false);
-        // customerArray.push(_custAddr);
+        customerDb[_custPhone] = Customer(_custName, _custPhone , _custData, _bankName, _bankAddress, false);
     }
 
     // 3. Check KYC status of existing bank customers
-    function kycStatus(string calldata _custName) public view returns (bool) {
-        return customerDb[_custName].isKycDone;
+    function kycStatus(uint256 _custPhone) public authorized(customerDb[_custPhone].bankAddress, "Customer do not exist in your bank") view returns (bool) {
+        return customerDb[_custPhone].isKycDone;
     }
 
     // 4. Perform the KYC of the customer and update the status
-    function addUpdateKyc(string calldata _custName) public authorized(customerDb[_custName].bankAddress, "Customer do not exist in your bank") {
-        // require(customerDb[_custName].bankAddress == msg.sender, "Customer do not exist in your bank");
+    function addUpdateKyc(uint256 _custPhone) public authorized(customerDb[_custPhone].bankAddress, "Customer do not exist in your bank") {
         require(bankDb[msg.sender].privilege == true, "Your bank is temporarily banned to perform any KYC");
 
-        customerDb[_custName].isKycDone = true;
+        customerDb[_custPhone].isKycDone = true;
     }
 
     // 5. Block bank to add any new customer
-    function blockBankToAddCustomer(address _bankAddress) public onlyAdmin {
+    function blockBankToAddCustomer(address _bankAddress) public  onlyAdmin {
         bankDb[_bankAddress].addCustomer = false;
     }
 
@@ -103,22 +102,22 @@ contract KYC {
         bankDb[_bankAddress].privilege = true;
     }
 
-    function customerInfo(string calldata _custName) 
+    function customerInfo(uint256 _custPhone) 
         public 
-        authorized(customerDb[_custName].bankAddress, "Customer do not exist in your bank") 
+        authorized(customerDb[_custPhone].bankAddress, "Customer do not exist in your bank") 
         view 
         returns (Customer memory)
     {
-        return customerDb[_custName];
+        return customerDb[_custPhone];
     }
 
     // 9. View customer data
-    function customerDetails(string calldata _custName) 
+    function customerDetails(uint256 _custPhone) 
         public 
-        authorized(customerDb[_custName].bankAddress, "Customer do not exist in your bank") 
+        authorized(customerDb[_custPhone].bankAddress, "Customer do not exist in your bank") 
         view 
         returns(string memory) 
     {
-        return customerDb[_custName].custData;
+        return customerDb[_custPhone].custData;
     }
 }
