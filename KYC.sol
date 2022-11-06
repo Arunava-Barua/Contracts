@@ -82,6 +82,7 @@ contract KYC {
         require(customerDb[_custPhone].isKycDone == false, "KYC for the customer is already done");
 
         customerDb[_custPhone].isKycDone = true;
+        bankDb[msg.sender].kycCount ++;
     }
 
     // 5. Block bank to add any new customer
