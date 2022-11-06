@@ -65,6 +65,7 @@ contract KYC {
         address _bankAddress
     ) public authorized(_bankAddress, "Intruder suspected") {
         require(bankDb[msg.sender].addCustomer == true, "Bank is temporarily unable to add customer");
+        require(customerDb[_custPhone].custPhone == 0 , "Mobile number already registered");
 
         // At first KYC is false for all customers
         customerDb[_custPhone] = Customer(_custName, _custPhone , _custData, _bankName, _bankAddress, false);
@@ -78,12 +79,13 @@ contract KYC {
     // 4. Perform the KYC of the customer and update the status
     function addUpdateKyc(uint256 _custPhone) public authorized(customerDb[_custPhone].bankAddress, "Customer do not exist in your bank") {
         require(bankDb[msg.sender].privilege == true, "Your bank is temporarily banned to perform any KYC");
+        require(customerDb[_custPhone].isKycDone == false, "KYC for the customer is already done");
 
         customerDb[_custPhone].isKycDone = true;
     }
 
     // 5. Block bank to add any new customer
-    function blockBankToAddCustomer(address _bankAddress) public  onlyAdmin {
+    function blockBankToAddCustomer(address _bankAddress) public onlyAdmin {
         bankDb[_bankAddress].addCustomer = false;
     }
 
