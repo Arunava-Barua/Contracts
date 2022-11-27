@@ -29,8 +29,18 @@ contract RealEstate is ERC1155, Ownable {
         incTokenId();
     }
 
+    struct Account {
+        address walletAddress;
+        string name;
+    }
+
+    mapping (address => Account) public accDetails;
+    mapping (address => bool) public accountExists;
+    mapping (address => Token[]) public ownerTokenDetails;
+
     struct Token {
         uint256 tokenId;
+        string landDetails;
         uint256 maxSupply;
         uint256 price;
     }
@@ -38,28 +48,34 @@ contract RealEstate is ERC1155, Ownable {
     Token[] public tokens;
     mapping (uint256 => Token) public tokenInfo;
 
-    mapping (uint256 => )
-
-    function createToken(uint256 _maxSupply, uint256 _price) public payable {
+    function createToken(uint256 _maxSupply, uint256 _price, string memory _landDetails, string memory _name) public payable {
         require(msg.value == MIN_FEE, "Please pay the transaction fee");
+
+        if (!accountExists[msg.sender]) {
+            Account memory newAccount = Account(msg.sender, _name);
+            accDetails[msg.sender] = newAccount;
+        }
+
         uint256 currId = currTokenId();
 
-        Token memory newToken = Token(currId, _maxSupply, _price);
+        Token memory newToken = Token(currId, _landDetails, _maxSupply, _price);
         tokens.push(newToken);
         tokenInfo[currId] = newToken;
-
+        ownerTokenDetails[msg.sender].push(newToken);
+        
         incTokenId();
 
         _mint(msg.sender, currId, _maxSupply, "");
     }
 
-    // function setURI(string memory newuri) public onlyOwner {
-    //     _setURI(newuri);
-    // }
-
-    function transfer(address _to, uint256 _tokenId, uint256 _amount)
-        public
-    {
+    function transfer(address _to, uint256 _tokenId, uint256 _amount) public {
         _safeTransferFrom(msg.sender, _to, _tokenId, _amount, "");
+    }
+
+    function withdraw() payable public onlyOwner {
+        require(address(this).balance >= 0, "Balance is 0");
+
+        (bool sent, ) = payable(admin).call{value: address(this).balance}("");
+        require(sent, "Failed to send Ether");
     }
 }
