@@ -47,7 +47,7 @@ contract RealEstate is ERC1155, Ownable {
     }
 
     event NewTokenCreated(uint256 indexed tokenId, address owner, uint256 maxSupply, uint256 price, string landDetails);
-    event OfferCreated(uint256 indexed offerId, uint256 tokenId, address creator, uint256[] quantity, address[] buyers , uint256[] areas , uint256[] prices);
+    event OfferCreated(uint256 indexed offerId, uint256 tokenId, address creator, uint256 quantity, address[] buyers , uint256[] areas , uint256[] prices);
     event TokenTransferred(address indexed from, address indexed to, uint256 tokenId, uint256 quantity);
     event OfferCanceled( address indexed seller , uint256 offerId);
 
@@ -70,10 +70,14 @@ contract RealEstate is ERC1155, Ownable {
     mapping(address => mapping(uint256 => Offer)) public buyOffers;
     mapping(address => mapping(uint256 => Offer)) public sellOffers;
 
+    // give id, get all sellOffers and buyOffers
+    mapping(address => Offer[]) public buyOffersArr;
+    mapping(address => Offer[]) public sellOffersArr;
+
     struct Offer {
         uint256 offerId;
         address owner;
-        uint256[] quantity;
+        uint256 quantity;
         uint256 tokenId;
         Status status;
         address[] buyers;
@@ -140,46 +144,57 @@ contract RealEstate is ERC1155, Ownable {
     enum Status { Started, Completed, Canceled}
     Status public status;
 
-    function offer(uint256 _tokenId, address[] memory _buyers, uint256[] memory _quantity,uint256[] memory _areas,uint256[] memory _prices) public {
-        uint256 sum = 0;
-        
-        for (uint256 i=0; i < _quantity.length; i++) {
-            sum += _quantity[i];
-        }
-        
-        require(balanceOf(msg.sender, _tokenId) >= sum, "You do not own this asset");
+    function offer(uint256 _tokenId, address[] memory _buyers, uint256 _quantity,uint256[] memory _areas,uint256[] memory _prices) public {
+        require(balanceOf(msg.sender, _tokenId) >= _quantity, "You do not own this asset");
 
         uint256 currOffer = currOfferId();
+
+        Offer memory newOffer = Offer(currOffer, msg.sender, _quantity, _tokenId, Status.Started, _buyers, _areas , _prices);
+        
+        sellOffers[msg.sender][currOffer] = newOffer;
+        
+        // adding to userSellOffers
+        sellOffersArr[msg.sender].push(newOffer);
+
+        offers.push(newOffer);
+        emit OfferCreated(currOffer, _tokenId, msg.sender, _quantity, _buyers , _areas , _prices);
+
         for (uint256 i = 0; i < _buyers.length ; i++) {
+            address[] memory currbuyer;
+            currbuyer[0] = _buyers[i];
+            uint256[] memory currarea;
+            currarea[0] = _areas[i];
+              uint256[] memory currprice;
+            currprice[0] = _prices[i];
             // created newOffer
-            Offer memory newOffer = Offer(currOffer, msg.sender, _quantity, _tokenId, Status.Started, _buyers, _areas , _prices);
-            
-            // sellOffers[msg.sender] = newOffer;
-            sellOffers[msg.sender][currOffer] = newOffer;
+            Offer memory newOffer2 = Offer(currOffer, msg.sender, _quantity, _tokenId, Status.Started, currbuyer, currarea , currprice);
 
             //   buyOffers[msg.sender] = newOffer;
-            buyOffers[_buyers[i]][currOffer] = newOffer;
+            buyOffers[_buyers[i]][currOffer] = newOffer2;
+
+            // adding to userSellOffers
+            buyOffersArr[_buyers[i]].push(newOffer2);
 
             // added to offers array
-            offers.push(newOffer);
+            offers.push(newOffer2);
+            emit OfferCreated(currOffer, _tokenId, msg.sender, _quantity, currbuyer , currarea , currprice);
 
         }
         // OfferCreated(uint256 indexed offerId, address creator, uint256 quantity);
-        emit OfferCreated(currOffer, _tokenId, msg.sender, _quantity, _buyers , _areas , _prices);
 
         incOfferId();
     }
 
     // give the money in escrow, then dispatch tokens to the address
-    function offerCancel( address _wallet , uint256 _offerId) public payable {
+    function offerCancel( uint256 _offerId) public payable {
         require(msg.value == MIN_FEE, "Please enter the required fee");
 
         // change state to cancelled
         // offersMap[_offerId].status = Status.Canceled; 
-        sellOffers[_wallet][_offerId].status = Status.Canceled;
+        sellOffers[msg.sender][_offerId].status = Status.Canceled;
 
         // OfferCanceled(uint256 offerId);
-        emit OfferCanceled(sellOffers[_wallet][_offerId].owner, _offerId);
+        emit OfferCanceled(sellOffers[msg.sender][_offerId].owner, _offerId);
     }
 
     function withdraw() payable public onlyOwner {
@@ -201,8 +216,6 @@ contract RealEstate is ERC1155, Ownable {
         
         // tokenId <= tokens.length else tokenId doest exist
         require(_tokenId <= tokens.length, "Token doesn't exist");
-
-        currOffer.status = Status.Completed;
        
         (bool sent, ) = payable(currOffer.owner).call{value: currOffer.prices[0]}("");
         require(sent, "Failed to send Ether");
@@ -211,8 +224,29 @@ contract RealEstate is ERC1155, Ownable {
 
         // TokenTransferred(address indexed from, address indexed to, uint256 tokenId, uint256 quantity);
         emit TokenTransferred(currOffer.owner,msg.sender, _tokenId, _quan);
+        currOffer.status = Status.Completed;
+
     }
 
+    function getBuyOffers(address _user) public view returns(Offer[] memory){
+        return buyOffersArr[_user];
+    }
+
+    function getSellOffers(address _user) public view returns(Offer[] memory){
+        return sellOffersArr[_user];
+    }
+
+    function getTokens() public view returns(Token[] memory) {
+        return tokens;
+    }
+
+    function getUserTokens(address _user) public view returns(Token[] memory) {
+        return ownerTokenDetails[_user];
+    }
+
+    function getUserInfo(address _user) public view returns(Account memory) {
+        return accDetails[_user];
+    }
 
     // returns the balance of the smart contract
     function balance() public view returns(uint256) {
